@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Define colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Check if commit message file is provided and readable
+if [ -z "$1" ] || [ ! -r "$1" ]; then
+    echo -e "\n${RED}Error: Commit message file not provided or not readable.${NC}"
+    exit 1
+fi
+
+# Read the commit message from the file
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Parse the commit message
+title=$(echo "$commit_msg" | head -n 1)
+description=$(sed -n '2,/^[Cc]loses:\|[Ff]ixes:/{ /^[Cc]loses:\|[Ff]ixes:/!p; }' "$commit_msg_file" | sed '/^\s*$/d')
+issue_reference_section=$(echo "$commit_msg" | grep -i "^\(Closes\|Fixes\):")
+
+# Check for empty title
+if [ -z "$title" ]; then
+    echo -e "\n${RED}Error: Commit title cannot be empty.${NC}"
+    exit 1
+fi
+
+# Check title length (47 characters)
+if [ ${#title} -gt 47 ]; then
+    echo -e "\n${RED}Error: Commit title is too long (${#title} > 47 characters)${NC}"
+    exit 1
+fi
+
+# Check for empty description if it exists
+if [ -n "$description" ]; then
+    while IFS= read -r line; do
+        if [ ${#line} -gt 67 ]; then
+            echo -e "\n${RED}Error: Description line too long (${#line} > 67 characters)${NC}"
+            exit 1
+        fi
+    done <<< "$description"
+fi
+
+# Define the regex pattern for Conventional Commits
+conventional_commit_regex="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z \-]+\))?!?: .+$"
+
+# Validate the commit message against the Conventional Commits pattern
+if ! [[ "$title" =~ $conventional_commit_regex ]]; then
+    echo -e "\n${RED}Error: Commit message does not follow Conventional Commits format.${NC}"
+    echo -e "${YELLOW}Format: <type>[scope]: <description>.${NC}"
+    echo -e "${YELLOW}Example: fix(parser): correct parsing error in index.js${NC}"
+    exit 1
+fi
+
+# Check for proper "Closes:" or "Fixes:" format if present
+if [ -n "$issue_reference_section" ] && ! [[ "$issue_reference_section" =~ ^(Closes|Fixes):[[:space:]]*#[0-9]+ ]]; then
+    echo -e "\n${RED}Error: Improper format for issue reference section. Expected 'Closes: #<issue_number>' or 'Fixes: #<issue_number>'.${NC}"
+    exit 1
+fi
+
+# If we got here, the commit message is valid
+echo -e "${GREEN}Commit message format is valid:${NC}"
+echo -e "${GREEN}Title:${NC} $title"
+echo -e "${GREEN}Description:${NC} $description"
+echo -e "${GREEN}Issue reference section:${NC} $issue_reference_section"
+
+# Exit with success , for testing purposes return 1 instead of 0
+exit 0
